@@ -1,10 +1,8 @@
 const ObscureTipPassword = require('./password.js')
 let obscureTip = new ObscureTipPassword()
 
-
 var mongoose = require('mongoose');
 mongoose.connect('mongodb://localhost/test');
-
 var db = mongoose.connection;
 db.on('error', console.error.bind(console, 'connection error:'));
 db.once('open', function() {
@@ -21,9 +19,10 @@ var schema = new mongoose.Schema({
 
 //lets compile the model, each user will get 1 model with 1 address
 var AddressModel = mongoose.model('addressModel',schema)
-
 const Discord = require('Discord.js')
 const client = new Discord.Client()
+const Wallet = require('./wallet.js')
+const wallet = new Wallet()
 
 client.on('ready', () => {
   console.log('I am ready!');
@@ -37,8 +36,7 @@ client.on('message', message => {
         message.channel.send("You have yet to register for an airdrop, type !airdrop")
       }else {
         timeStart = addressModel.timeClaim
-        console.log(timeStart)
-        currentTimeLeft = secondToDayConverter((timeStart + 1210000) - Date.now())
+        currentTimeLeft = secondToDayConverter((timeStart + 1210000000) - Date.now())
         message.channel.send("You still have to wait: " + currentTimeLeft + " days ")
       }
     })
@@ -85,22 +83,35 @@ client.on('message', message => {
   }
     // Send "pong" to the same channel
     //first lets ping mongoDB for any addressModels which has already been created
-
+  
   if(message.content === '!claim'){
-
     //first lets find our addresses
     AddressModel.findOne({'id':message.author.id},function(err,addressModel) {
       if(addressModel != null) {
-        if(addressModel.timeClaim - Date.now() >= 1.21e+6 ) {
-          message.channel.send("2 weeks have elapsed, we've credited you 50 XSC :)")
-          message.channel.send("Creating transaction to address: ")
-          message.channel.send(addressModel.address)
+        if(addressModel.timeClaim - Date.now() >= 1.21e+9 ) {
+          message.channel.send("2 weeks have elapsed, we're credited you 50 XSC :)")
+          message.channel.send("Creating transaction to address: " + addressModel.address)
+          wallet.transfer(addressModel.address).then((result) => {
+            if((result[0]) == undefined) {
+              message.channel.send("Error: " + result[1].errorCode)
+              message.channel.send("Please try to claim again in a few minutes")
+            }else {
+              //transaction send
+              message.channel.send("Transaciton hash: " + result[0])
+              addressModel.claimStatus = 0
+              addressModel.save(function(err) {
+                if (err) return handleError(err);
+                message.channel.send("Your account has claimed the airdrop, no more claiming :)")
+              })
+            }
+          }).catch((error) => {
+            message.channel.send(error)
+          })
 
-        }else if(addressModel.timeClaim - Date.now() <= 1.21e+6){
+        }else if(addressModel.timeClaim - Date.now() <= 1.21e+9){
           message.channel.send("2 weeks have yet to be elapsed")
           timeStart = addressModel.timeClaim
-          console.log(timeStart)
-          currentTimeLeft = secondToDayConverter((timeStart + 1210000) - Date.now())
+          currentTimeLeft = secondToDayConverter((timeStart + 1210000000) - Date.now())
           message.channel.send("You still have to wait: " + currentTimeLeft + " days ")
         }
       }else {
@@ -110,17 +121,30 @@ client.on('message', message => {
     });
   }
 
+  //admin commands
+  if(message.content === "!delete all") {
+    if(message.author.id == '532540846445297675'){
+      AddressModel.deleteMany({ id: message.author.id }, function (err) {
+          if (err) return handleError(err);
+          message.channel.send("Deleted all databases")
+      });
+    }else {
+      message.channel.send("Only @pauscrypto can delete database")
+    }
 
-  if(message.content === "!delete") {
-    AddressModel.deleteMany({ id: message.author.id }, function (err) {
-        if (err) return handleError(err);
-        console.log("deleted")
-    });
+  }
+  if(message.content === '!status') {
+    wallet.getSyncStatus().then((result) => {
+      console.log("trigger")
+      message.channel.send("Walelt sync status: " + result[2] + "/" + result[1])
+    }).catch((error) => {
+      console.log(error)
+    })
   }
 });
 
 function secondToDayConverter(seconds) {
-  return seconds/86400
+  return seconds/86400000
 }
 
 client.login(obscureTip.token);

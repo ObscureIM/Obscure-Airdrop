@@ -25,7 +25,9 @@
   "dependencies": {
     "discord.js": "^11.4.2",
     "mongoose": "^5.4.18",
-    "turtlecoin-utils": "git+https://github.com/turtlecoin/turtlecoin-utils.git",
+    "obscure-crypto": "^0.0.2",
+    "obscure-utils": "^0.0.2",
+    "obscure-wallet-backend": "^1.0.2",
     "uws": "^100.0.1"
   }
 }

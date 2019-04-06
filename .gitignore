@@ -2,3 +2,4 @@
 node_modules/
 #password file
 password.js
+walletpassword.js
