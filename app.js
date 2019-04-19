@@ -21,8 +21,24 @@ var schema = new mongoose.Schema({
 var AddressModel = mongoose.model('addressModel',schema)
 const Discord = require('Discord.js')
 const client = new Discord.Client()
-const Wallet = require('./wallet.js')
-const wallet = new Wallet()
+
+const TurtleService = require('turtlecoin-rpc').TurtleService
+const service = new TurtleService({
+  host: '209.97.174.174', // ip address or hostname of the turtle-service host
+  port: 10071, // what port is turtle-service running on
+  timeout: 20000, // request timeout
+  ssl: false, // whether we need to connect using SSL/TLS
+  rpcPassword: obscureTip.rpc, // must be set to the password used to run turtle-servic
+  // RPC API default values
+  defaultMixin: 0, // the default mixin to use for transactions, the default setting is false which means we don't have a default value
+  defaultFee: 0.01, // the default transaction fee for transactions
+  defaultBlockCount: 1, // the default number of blocks when blockCount is required
+  decimalDivisor: 100000000, // Currency has many decimal places?
+  defaultFirstBlockIndex: 1, // the default first block index we will use when it is required
+  defaultUnlockTime: 0, // the default unlockTime for transactions
+  defaultFusionThreshold: 10000000, // the default fusionThreshold for fusion transactions
+})
+
 
 client.on('ready', () => {
   console.log('I am ready!');
@@ -83,36 +99,47 @@ client.on('message', message => {
   }
     // Send "pong" to the same channel
     //first lets ping mongoDB for any addressModels which has already been created
-  
+
   if(message.content === '!claim'){
     //first lets find our addresses
     AddressModel.findOne({'id':message.author.id},function(err,addressModel) {
       if(addressModel != null) {
-        if(addressModel.timeClaim - Date.now() >= 1.21e+9 ) {
+        if(addressModel.timeClaim - Date.now() >= 1.21e+9 && addressModel.claimStatus == 1) {
           message.channel.send("2 weeks have elapsed, we're credited you 50 XSC :)")
           message.channel.send("Creating transaction to address: " + addressModel.address)
-          wallet.transfer(addressModel.address).then((result) => {
-            if((result[0]) == undefined) {
-              message.channel.send("Error: " + result[1].errorCode)
-              message.channel.send("Please try to claim again in a few minutes")
-            }else {
-              //transaction send
-              message.channel.send("Transaciton hash: " + result[0])
-              addressModel.claimStatus = 0
-              addressModel.save(function(err) {
+          service.sendTransaction({
+            transfers:[
+              //send 1 XSC to the address
+              service.newTransfer(address,50)
+            ],
+            fee: 0.0001,
+            mixin:3,
+          }).then((result) => {
+            message.channel.send("Transaciton hash" + result)
+            AddressModel.deleteMany({ id: message.author.id }, function (err) {
                 if (err) return handleError(err);
-                message.channel.send("Your account has claimed the airdrop, no more claiming :)")
-              })
+            });
+            var poolInfo = {
+              id:message.author.id,
+              address: message.content.substring(9),
+              timeClaim: Date.now(),
+              claimStatus: 0
             }
-          }).catch((error) => {
-            message.channel.send(error)
+            var addressModel = new AddressModel(poolInfo)
+            addressModel.save(function(err) {
+              if (err) return handleError(err);
+              message.channel.send("You wont be able to claim anymore.")
+            })
+          }).catch(function(error) {
+            message.channel.send("Failed to make transaction, try again")
           })
-
         }else if(addressModel.timeClaim - Date.now() <= 1.21e+9){
           message.channel.send("2 weeks have yet to be elapsed")
           timeStart = addressModel.timeClaim
           currentTimeLeft = secondToDayConverter((timeStart + 1210000000) - Date.now())
           message.channel.send("You still have to wait: " + currentTimeLeft + " days ")
+        }else if(addressMode.claimStatus != 1) {
+          message.channel.send("You have already claimed, no more claims for you")
         }
       }else {
         message.channel.send("You have yet to file your claim, type !airdrop.")
