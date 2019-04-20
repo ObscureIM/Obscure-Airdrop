@@ -19,7 +19,7 @@ var schema = new mongoose.Schema({
 
 //lets compile the model, each user will get 1 model with 1 address
 var AddressModel = mongoose.model('addressModel',schema)
-const Discord = require('Discord.js')
+const Discord = require('discord.js')
 const client = new Discord.Client()
 
 const TurtleService = require('turtlecoin-rpc').TurtleService
@@ -104,24 +104,25 @@ client.on('message', message => {
     //first lets find our addresses
     AddressModel.findOne({'id':message.author.id},function(err,addressModel) {
       if(addressModel != null) {
-        if(addressModel.timeClaim - Date.now() >= 1.21e+9 && addressModel.claimStatus == 1) {
-          message.channel.send("2 weeks have elapsed, we're credited you 50 XSC :)")
+	timeStart = addressModel.timeClaim
+        if(secondToDayConverter((timeStart + 1210000000) - Date.now()) <=0 && addressModel.claimStatus == 1) { 
+          message.channel.send("2 weeks have elapsed, we're credited you 10 XSC :)")
           message.channel.send("Creating transaction to address: " + addressModel.address)
           service.sendTransaction({
             transfers:[
               //send 1 XSC to the address
-              service.newTransfer(address,50)
+              service.newTransfer(addressModel.address,10)
             ],
             fee: 0.0001,
             mixin:3,
           }).then((result) => {
-            message.channel.send("Transaciton hash" + result)
+            message.channel.send("Transaciton hash: " + result.transactionHash)
             AddressModel.deleteMany({ id: message.author.id }, function (err) {
                 if (err) return handleError(err);
             });
             var poolInfo = {
               id:message.author.id,
-              address: message.content.substring(9),
+              address: "000000",
               timeClaim: Date.now(),
               claimStatus: 0
             }
@@ -133,12 +134,12 @@ client.on('message', message => {
           }).catch(function(error) {
             message.channel.send("Failed to make transaction, try again")
           })
-        }else if(addressModel.timeClaim - Date.now() <= 1.21e+9){
+        }else if(secondToDayConverter((timeStart + 1210000000) - Date.now()) > 0 && addressModel.claimStatus ==1 ){
           message.channel.send("2 weeks have yet to be elapsed")
           timeStart = addressModel.timeClaim
           currentTimeLeft = secondToDayConverter((timeStart + 1210000000) - Date.now())
           message.channel.send("You still have to wait: " + currentTimeLeft + " days ")
-        }else if(addressMode.claimStatus != 1) {
+        }else if(addressModel.claimStatus != 1) {
           message.channel.send("You have already claimed, no more claims for you")
         }
       }else {
